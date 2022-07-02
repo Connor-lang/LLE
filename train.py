@@ -29,9 +29,11 @@ if __name__ == "__main__":
     dataset = data_loader.load_data()
     dataset_size = len(data_loader)
     print('Number of training images = %d' % dataset_size)
+    print(f'Shape of image = {next(iter(dataset))["A"].shape}')
     logging.info(f"Number of training images = {dataset_size}")
 
     model = EnlightenGANModel()
+    model.initialize(opt)
 
     total_steps = 0
 
@@ -44,6 +46,7 @@ if __name__ == "__main__":
             total_steps += opt.batchSize
             epoch_iter = total_steps - dataset_size * (epoch - 1)
             model.set_input(data)
+            print("Optimizing parameters")
             model.optimize_parameters(epoch)
             
             if total_steps % opt.print_freq == 0:
