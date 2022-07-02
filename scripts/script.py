@@ -20,7 +20,8 @@ if opt.train:
                 --use_ragan \
                 --hybrid_loss \
                 --vgg 1 \
-                --vgg_choose relu5_1")
+                --vgg_choose relu5_1 \
+                --gpu_ids 0,1,2")
 elif opt.predict:
     for i in range(1):
         os.system("python predict.py \
