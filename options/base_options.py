@@ -38,8 +38,11 @@ class BaseOptions():
         self.parser.add_argument('--n_patch', type=int, default=0, help='choose the number of crops for patch discriminator')
         self.parser.add_argument('--patch_vgg', action='store_true', help='use vgg loss between each patch')
         self.parser.add_argument('--hybrid_loss', action='store_true', help='use lsgan and ragan separately')
+        self.parser.add_argument('--low_times', type=int, default=200, help='choose the number of crop for patch discriminator')
+        self.parser.add_argument('--high_times', type=int, default=400, help='choose the number of crop for patch discriminator')
         self.parser.add_argument('--vary', type=int, default=1, help='use light data augmentation')
         self.parser.add_argument('--new_lr', action='store_true', help='tanh')
+        self.parser.add_argument('--lighten', action='store_true', help='normalize attention map')
         self.initialized = True
 
     def parse(self):
@@ -56,7 +59,7 @@ class BaseOptions():
                 self.opt.gpu_ids.append(id)
         if len(self.opt.gpu_ids) > 0:
             print(f"GPU_IDS: {self.opt.gpu_ids[0]}")
-            torch.cuda.set_device(self.opt.gpu_ids[0])
+            # torch.cuda.set_device(self.opt.gpu_ids[0])
         
         args = vars(self.opt)
 
