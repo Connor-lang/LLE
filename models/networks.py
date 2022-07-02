@@ -14,22 +14,20 @@ class UnetGenerator(nn.Module):
         self.gpu_ids = gpu_ids
         assert(input_nc == output_nc)
 
-        self.down1 = ConvBlock(4, 32)
-        self.down2 = ConvBlock(32, 64)
-        self.down3 = ConvBlock(64, 128)
-        self.down4 = ConvBlock(128, 256)
-        self.down5 = ConvBlock(256, 512)
-        
-        self.up1 = nn.ConvTranspose2d(512, 256, kernel_size=(2, 2))
-        self.up2 = nn.ConvTranspose2d(256, 128, kernel_size=(2, 2))
-        self.up3 = nn.ConvTranspose2d(128, 64, kernel_size=(2, 2))
-        self.up4 = nn.ConvTranspose2d(64, 32, kernel_size=(2, 2))
-        
-        self.conv1 = ConvBlock(512, 256)
-        self.conv2 = ConvBlock(256, 128)
-        self.conv3 = ConvBlock(128, 64)
-        self.conv4 = ConvBlock(64, 32)
-        self.conv5 = nn.Conv2d(32, 3, kernel_size=1)
+        self.conv1 = Double_Conv2d(4, 32)
+        self.conv2 = Double_Conv2d(32, 64)
+        self.conv3 = Double_Conv2d(64, 128)
+        self.conv4 = Double_Conv2d(128, 256)
+        self.conv5 = Double_Conv2d(256, 512)
+        self.up6 = nn.ConvTranspose2d(512, 256, kernel_size=2, stride=2)
+        self.conv6 = Double_Conv2d(512, 256)
+        self.up7 = nn.ConvTranspose2d(256, 128, kernel_size=2, stride=2)
+        self.conv7 = Double_Conv2d(256, 128)
+        self.up8 = nn.ConvTranspose2d(128, 64, kernel_size=2, stride=2)
+        self.conv8 = Double_Conv2d(128, 64)
+        self.up9 = nn.ConvTranspose2d(64, 32, kernel_size=2, stride=2)
+        self.conv9 = Double_Conv2d(64, 32)
+        self.conv10 = nn.Conv2d(in_channels=32, out_channels=3, kernel_size=1)
 
     def forward(self, x, gray):
         gray2 = F.max_pool2d(gray, kernel_size=2)
@@ -37,52 +35,64 @@ class UnetGenerator(nn.Module):
         gray4 = F.max_pool2d(gray3, kernel_size=2)
         gray5 = F.max_pool2d(gray4, kernel_size=2)
 
-        x = torch.cat([x, gray], dim=1)
-        x1, x = self.down1(x)
-        x2, x = self.down2(x)
-        x3, x = self.down3(x)
-        x4, x = self.down4(x)
-        x5, x = self.down5(x)
-        
-        x5 = x5 * gray5
+        x = torch.cat([x, gray], 1)
+        conv1 = self.conv1(x)
+        pool1 = F.max_pool2d(conv1, kernel_size=2)
 
-        y1 = self.up1(x5)
-        x4 = x4 * gray4
-        y1 = torch.cat([y1, x4], dim=1)
-        conv1 = self.conv1(y1)
+        conv2 = self.conv2(pool1)
+        pool2 = F.max_pool2d(conv2, kernel_size=2)
 
-        y2 = self.up2(conv1)
-        x3 = x3 * gray3
-        y2 = torch.cat([y2, x3], dim=1)
-        conv2 = self.conv2(y2)
+        conv3 = self.conv3(pool2)
+        pool3 = F.max_pool2d(conv3, kernel_size=2)
 
-        y3 = self.up3(conv2)
-        x2 = x2 * gray2
-        y3 = torch.cat([y3, x2], dim=1)
-        conv3 = self.conv3(y3)
+        conv4 = self.conv4(pool3)
+        pool4 = F.max_pool2d(conv4, kernel_size=2)
 
-        y4 = self.up4(conv3)
-        x1 = x1 * gray
-        y4 = torch.cat([y4, x1], dim=1)
-        conv4 = self.conv4(y4)
+        conv5 = self.conv5(pool4)
+        conv5 = conv5 * gray5
 
-        conv5 = self.conv5(conv4)
-        latent = self.tanh(conv5 * gray)
-        latent = F.relu(latent)
-        output = latent + x
-        return output, latent
+        up6 = self.up6(conv5)
+        conv4 = conv4 * gray4
+        up6 = torch.cat([up6, conv4], 1)
+        conv6 = self.conv6(up6)
 
-class ConvBlock(nn.Module):
-    def __init__(self, input_nc, output_nc, norm_layer=nn.BatchNorm2d):
-        super(ConvBlock, self).__init__()
-        conv = nn.Conv2d(input_nc, output_nc, kernel_size=(3, 3), stride=1, padding=1)
-        relu = nn.LeakyReLU(0.2, True)
-        norm = norm_layer(output_nc)
-        model = [conv + relu + norm + conv + relu + norm]
-        self.model = nn.Sequential(*model)
+        up7 = self.up7(conv6)
+        conv3 = conv3 * gray3
+        up7 = torch.cat([up7, conv3], 1)
+        conv7 = self.conv7(up7)
+
+        up8 = self.up8(conv7)
+        conv2 = conv2 * gray2
+        up8 = torch.cat([up8, conv2], 1)
+        conv8 = self.conv8(up8)
+
+        up9 = self.up9(conv8)
+        conv1 = conv1 * gray
+        up9 = torch.cat([up9, conv1], 1)
+        conv9 = self.conv9(up9)
+
+        conv10 = self.conv10(conv9)
+        out = F.pixel_shuffle(conv10, 1)
+
+        return out
+
+class Double_Conv2d(nn.Module):
+    def __init__(self, in_channel, out_channel):
+        super(Double_Conv2d, self).__init__()
+        self.double_conv2d = torch.nn.Sequential(
+            nn.Conv2d(
+                in_channels=in_channel,
+                out_channels=out_channel,
+                kernel_size=3,
+                padding=1), nn.LeakyReLU(0.2),
+            nn.Conv2d(
+                in_channels=out_channel,
+                out_channels=out_channel,
+                kernel_size=3,
+                padding=1), nn.LeakyReLU(0.2))
 
     def forward(self, x):
-        return self.model(x)
+        return self.double_conv2d(x)
 
 class NLayerDiscriminator(nn.Module):
     def __init__(self, input_nc, ndf=64, n_layers=3, padw=2, norm_layer=nn.BatchNorm2d, gpu_ids=[]):
@@ -152,6 +162,8 @@ class GANLoss(nn.Module):
 
     def __call__(self, input, target_is_real):
         target_tensor = self.get_target_tensor(input, target_is_real)
+        print(f"input.is_cuda: {input.is_cuda}")
+        print(f"target_tensor.is_cuda: {target_tensor.is_cuda}")
         return self.loss(input, target_tensor)
 
 class DiscLossWGANGP():
@@ -256,7 +268,7 @@ def load_vgg16(model_dir, gpu_ids):
     vgg = Vgg16()
     vgg.cuda(device=gpu_ids[0])
     vgg.load_state_dict(torch.load(os.path.join(model_dir, 'vgg16.weight')))
-    vgg = torch.nn.DataParallel(vgg, gpu_ids)
+    vgg = torch.nn.DataParallel(vgg, device_ids=[0])
     return vgg
 
 def vgg_preprocess(batch, opt):

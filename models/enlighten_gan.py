@@ -24,6 +24,10 @@ class EnlightenGANModel(BaseModel):
         self.input_B = self.Tensor(batchSize, opt.output_nc, size, size)
         self.input_img = self.Tensor(batchSize, opt.input_nc, size, size)
         self.input_A_gray = self.Tensor(batchSize, 1, size, size)
+        print(f"self.input_A.is_cuda: {self.input_A.is_cuda}")
+        print(f"self.input_B.is_cuda: {self.input_B.is_cuda}")
+        print(f"self.input_img.is_cuda: {self.input_img.is_cuda}")
+        print(f"self.input_A_gray.is_cuda: {self.input_A_gray.is_cuda}")
 
         if opt.vgg > 0:
             self.vgg_loss = networks.PerceptualLoss(opt)
@@ -70,24 +74,24 @@ class EnlightenGANModel(BaseModel):
             self.optimizer_patch_D = torch.optim.Adam(self.patch_D.parameters(), lr=opt.lr, betas=(opt.beta1, 0.999))
     
     def set_input(self, input):
-        self.input_A = input['A']
-        self.input_A_gray = input['A_gray']
-        self.input_B = input['B']
-        self.input_img = input['input_img']
+        self.input_A = input['A'].cuda()
+        self.input_A_gray = input['A_gray'].cuda()
+        self.input_B = input['B'].cuda()
+        self.input_img = input['input_img'].cuda()
         self.image_paths = input['A_paths']
 
     def test(self):
         self.real_A = Variable(self.input_A, volatile=True)
         self.real_A_gray = Variable(self.input_A_gray, volatile=True)
         self.real_A = (self.real_A - torch.min(self.real_A)) / (torch.max(self.real_A) - torch.min(self.real_A))
-        self.fake_B, self.latent_real_A = self.G.forward(self.real_A, self.real_A_gray)
+        self.fake_B = self.G.forward(self.real_A, self.real_A_gray)
         self.real_B = Variable(self.input_B, volatile=True)
     
     def predict(self):
         self.real_A = Variable(self.input_A, volatile=True)
         self.real_A_gray = Variable(self.input_A_gray, volatile=True)
         self.real_A = (self.real_A - torch.min(self.real_A))/(torch.max(self.real_A) - torch.min(self.real_A))
-        self.fake_B, self.latent_real_A = self.netG_A.forward(self.real_A, self.real_A_gray)
+        self.fake_B = self.netG_A.forward(self.real_A, self.real_A_gray)
         real_A = util.tensor2im(self.real_A.data)
         fake_B = util.tensor2im(self.fake_B.data)
         return OrderedDict([('real_A', real_A), ('fake_B', fake_B)])
@@ -102,7 +106,8 @@ class EnlightenGANModel(BaseModel):
         self.real_img = Variable(self.input_img)
 
         self.real_A = (self.real_A - torch.min(self.real_A)) / (torch.max(self.real_A) - torch.min(self.real_A))
-        self.fake_B, self.latent_real_A = self.G(self.real_img, self.input_A_gray)
+        self.fake_B = self.G.forward(self.real_img, self.input_A_gray)
+        print(f"forward: self.fake_B.is_cuda: {self.fake_B.is_cuda}")
         
         if self.opt.patchD:
             h = self.input_A.size(2)
@@ -181,6 +186,10 @@ class EnlightenGANModel(BaseModel):
             self.loss_G_A = -pred_fake.mean()
         elif self.opt.use_ragan:
             pred_real = self.D.forward(self.real_B)
+            print(f"self.fake_B.is_cuda: {self.fake_B.is_cuda}")
+            print(f"self.real_B.is_cuda: {self.real_B.is_cuda}")
+            print(f"pred_fake.is_cuda: {pred_fake.is_cuda}")
+            print(f"pred_real.is_cuda: {pred_real.is_cuda}")
             self.loss_G_A = (self.criterionGAN(pred_real - torch.mean(pred_fake), False) + 
                                 self.criterionGAN(pred_fake - torch.mean(pred_real), True)) / 2
         else:
@@ -268,11 +277,10 @@ class EnlightenGANModel(BaseModel):
         real_A = util.tensor2im(self.real_A.data)
         fake_B = util.tensor2im(self.fake_B.data)
         real_B = util.tensor2im(self.real_B.data)
-        latent_real_A = util.latent2im(self.latent_real_A.data)
         fake_patch = util.tensor2im(self.fake_patch.data)
         real_patch = util.tensor2im(self.real_patch.data)
         self_attention = util.atten2im(self.real_A_gray.data)
-        return OrderedDict([('real_A', real_A), ('fake_B', fake_B), ('latent_real_A', latent_real_A), ('real_B', real_B), 
+        return OrderedDict([('real_A', real_A), ('fake_B', fake_B), ('real_B', real_B), 
                                 ('real_patch', real_patch), ('fake_patch', fake_patch), ('self_attention', self_attention)])
         
     def save(self, label):
